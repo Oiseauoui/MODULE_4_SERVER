@@ -13,21 +13,22 @@ from flask import Flask
 from jinja2 import Environment, FileSystemLoader
 import time
 
-env = Environment(loader=FileSystemLoader('templates'))
 app = Flask(__name__, template_folder='templates')
-logging.basicConfig(level=logging.DEBUG)
-app.logger.setLevel(logging.DEBUG)
+
 
 BASE_DIR = pathlib.Path()
 
+
+env = Environment(loader=FileSystemLoader('templates'))
 json_file_path = None
 
 SERVER_IP = '127.0.0.1'
 SERVER_PORT = 5000
 BUFFER = 1024
 LOG_FILE = 'server.log'
-DATA_FILE = 'storage/data.json'
+DATA_FILE = 'data/data.json'
 
+jinja = Environment(loader=FileSystemLoader('templates'))
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO)
 
 
@@ -55,13 +56,11 @@ class HTTPHandler(BaseHTTPRequestHandler):
                 self.send_html('index.html')
             case "/message":
                 self.send_html('message.html')
-            # case "/blog":
-            #     self.render_template('blog.html')
             case "/blog":
-                self.send_html('blog.html')
+                self.render_template('blog.jinja')
             case _:
                 # print(BASE_DIR / route.path[1:])
-                file = BASE_DIR / route.path[1:]
+                file = BASE_DIR.joinpath(route.path[1:])
                 if file.exists():
                     self.send_static(file)
                 else:
@@ -73,32 +72,21 @@ class HTTPHandler(BaseHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
-        with open(filename, 'rb') as f:
-            self.wfile.write(f.read())
+        with open(filename, 'rb') as file:
+            self.wfile.write(file.read())
 
     def render_template(self, filename, status_code=200):
         self.send_response(status_code)
         self.send_header('Content-Type', 'text/html')
         self.end_headers()
 
-        try:
-            with open('blog.json', 'r', encoding='utf-8') as file_descriptor:
-                blogs = json.load(file_descriptor)
-            print(blogs)
-            print("Data loaded from blog.json:", blogs)
-        except Exception as e:
-            print(f"Error loading data from blog.json: {e}")
-            blogs = []
+        with open('storage/blog.json', 'r', encoding='utf-8') as file:
+            data = json.load(file)
 
-        template = env.get_template(filename)
-
-        try:
-            html = template.render(blogs=blogs)
-            self.wfile.write(html.encode())
-            print("Rendering successful")
-        except Exception as e:
-            print(f"Error rendering template: {e}")
-            self.send_error(500, message="Internal Server Error")
+        template = jinja.get_template(filename)
+        message = None  # "Hello Sergiy!"
+        html = template.render(blogs=data, message=message)
+        self.wfile.write(html.encode())
 
     def send_static(self, filename):
         self.send_response(200)
@@ -149,6 +137,7 @@ def save_data(data):
         logging.error(f"Failed to write data to {json_file_path} with error {err}")
 
 
+
 def run_socket_server(ip, port):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server = (ip, port)
@@ -172,7 +161,7 @@ def run_socket_server(ip, port):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(threadName)s %(message)s")
-    STORAGE_DIR = pathlib.Path().joinpath('storage')
+    STORAGE_DIR = pathlib.Path().joinpath('data')
     FILE_STORAGE = STORAGE_DIR / 'data.json'
     if not FILE_STORAGE.exists():
         with open(FILE_STORAGE, 'w', encoding='utf-8') as fd:
